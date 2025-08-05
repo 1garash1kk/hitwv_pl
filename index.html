@@ -1,0 +1,1166 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { initializeApp } from 'firebase/app';
+import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
+
+// --- アイコンコンポーネント (Lucide React) ---
+const HomeIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>;
+const CalendarDaysIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/><path d="M8 18h.01"/><path d="M12 18h.01"/><path d="M16 18h.01"/></svg>;
+const PlusSquareIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>;
+const UsersIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>;
+const MountainIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m8 3 4 8 5-5 5 15H2L8 3z"/></svg>;
+const ListIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></svg>;
+const FileTextIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></svg>;
+const ChevronLeftIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>;
+const ChevronRightIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>;
+const Trash2Icon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>;
+const EditIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>;
+const ExternalLinkIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" x2="21" y1="14" y2="3"/></svg>;
+const AlertTriangleIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>;
+
+// --- App ID ---
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+// --- モックデータ ---
+const initialMembers = [
+  { id: '1', name: '山田 太郎', grade: 'W3', license: true },
+  { id: '2', name: '鈴木 花子', grade: 'W2', license: true },
+  { id: '3', name: '佐藤 次郎', grade: 'W2', license: false },
+  { id: '4', name: '田中 三郎', grade: 'W1', license: false },
+  { id: '5', name: '高橋 四郎', grade: 'W3', license: true },
+];
+
+const initialSchedules = {
+  '1': { '2025-08-15': '〇', '2025-08-16': '〇', '2025-09-01': '△' },
+  '2': { '2025-08-15': '〇', '2025-08-17': '×', '2025-09-01': '〇' },
+  '3': { '2025-08-15': '△', '2025-08-20': '〇' },
+  '4': { '2025-08-16': '〇', '2025-09-01': '〇' },
+  '5': { '2025-08-15': '〇', '2025-09-01': '〇' },
+};
+
+const initialPlans = [
+  { id: 'p1', name: '夏合宿（北アルプス）', startDate: '2025-08-15', endDate: '2025-08-18', url: 'https://example.com/plan1', members: ['1', '2', '3'], inTownMembers: [], status: '提出済' },
+  { id: 'p2', name: '奥多摩日帰り山行', startDate: '2025-09-01', endDate: '2025-09-01', url: 'https://example.com/plan2', members: ['2', '4', '5'], inTownMembers: [], status: '未承認' },
+  { id: 'p3', name: '秋合宿偵察', startDate: '2025-09-20', endDate: '2025-09-22', url: '', members: ['1', '5'], inTownMembers: [], status: '未提出' },
+];
+
+const initialMinutes = [
+    { id: 'm1', date: '2025-07-28', author: '山田 太郎', content: '<h1>7月度定例会議</h1><p>夏合宿についての最終確認を行った。</p><ul><li>日程: 8/15-8/18</li><li>場所: 北アルプス</li><li>参加者: 3名</li></ul>' },
+    { id: 'm2', date: '2025-08-04', author: '鈴木 花子', content: '<h1>8月度第一回会議</h1><p>奥多摩日帰り山行の計画について話し合った。</p>' },
+];
+
+
+// --- ヘルパー関数 ---
+const formatDate = (dateStr) => {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return '';
+  return `${date.getFullYear()}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')}`;
+};
+
+const getDaysUntil = (dateStr) => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const targetDate = new Date(dateStr);
+  targetDate.setHours(0, 0, 0, 0);
+  const diffTime = targetDate - today;
+  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+};
+
+const statusMap = {
+  '〇': 'bg-green-100 text-green-800',
+  '△': 'bg-yellow-100 text-yellow-800',
+  '×': 'bg-red-100 text-red-800',
+  '未': 'bg-slate-100 text-slate-800',
+};
+
+const statusText = {
+  '〇': '参加',
+  '△': '未定',
+  '×': '不参加',
+  '未': '未入力',
+};
+
+// --- 共通コンポーネント ---
+const Card = ({ children, className = '' }) => (
+  <div className={`bg-white rounded-xl shadow-md p-4 sm:p-6 ${className}`}>
+    {children}
+  </div>
+);
+
+const CardTitle = ({ children }) => (
+  <h2 className="text-xl font-bold text-slate-800 mb-4">{children}</h2>
+);
+
+const Button = ({ children, onClick, className = '', variant = 'primary' }) => {
+  const baseClasses = 'px-4 py-2 rounded-lg font-semibold flex items-center justify-center gap-2 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2';
+  const variants = {
+    primary: 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500',
+    secondary: 'bg-slate-200 text-slate-800 hover:bg-slate-300 focus:ring-slate-400',
+    danger: 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500',
+    ghost: 'bg-transparent text-slate-600 hover:bg-slate-100 focus:ring-slate-400',
+  };
+  return <button onClick={onClick} className={`${baseClasses} ${variants[variant]} ${className}`}>{children}</button>;
+};
+
+const Input = (props) => (
+  <input {...props} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+);
+
+const Select = (props) => (
+  <select {...props} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+);
+
+const Modal = ({ isOpen, title, message, onConfirm, onCancel, showCancel, confirmText = 'OK', confirmVariant = 'primary' }) => {
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4">
+            <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+                <h3 className="text-lg font-bold text-slate-800 mb-4">{title}</h3>
+                <p className="text-slate-600 mb-6">{message}</p>
+                <div className="flex justify-end gap-3">
+                    {showCancel && <Button onClick={onCancel} variant="secondary">キャンセル</Button>}
+                    <Button onClick={onConfirm} variant={confirmVariant}>{confirmText}</Button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// --- メインコンポーネント ---
+
+// 機能③: メンバー管理ページ
+const MembersPage = ({ members, db, showModal }) => {
+  const [newMemberName, setNewMemberName] = useState('');
+  const [newMemberGrade, setNewMemberGrade] = useState('W1');
+  const [newMemberLicense, setNewMemberLicense] = useState(false);
+  const [filter, setFilter] = useState('all');
+
+  const addMember = async () => {
+    if (!newMemberName.trim() || !db) {
+      showModal({ title: '入力エラー', message: 'メンバー名を入力してください。', showCancel: false });
+      return;
+    }
+    const newId = new Date().getTime().toString();
+    const newMember = { id: newId, name: newMemberName, grade: newMemberGrade, license: newMemberLicense };
+    
+    try {
+      const membersCollectionPath = `artifacts/${appId}/public/data/members`;
+      await setDoc(doc(db, membersCollectionPath, newId), newMember);
+      setNewMemberName('');
+      setNewMemberGrade('W1');
+      setNewMemberLicense(false);
+    } catch (e) {
+      console.error("Error adding document: ", e);
+      showModal({ title: 'エラー', message: 'メンバーの追加に失敗しました。', showCancel: false });
+    }
+  };
+
+  const deleteMember = (id) => {
+    const memberToDelete = members.find(m => m.id === id);
+    showModal({
+        title: 'メンバーの削除',
+        message: `「${memberToDelete?.name}」を本当に削除しますか？`,
+        confirmText: '削除',
+        confirmVariant: 'danger',
+        onConfirm: async () => {
+            if (!db) return;
+            try {
+                const membersCollectionPath = `artifacts/${appId}/public/data/members`;
+                await deleteDoc(doc(db, membersCollectionPath, id));
+            } catch (e) {
+                console.error("Error deleting document: ", e);
+                showModal({ title: 'エラー', message: 'メンバーの削除に失敗しました。', showCancel: false });
+            }
+        }
+    });
+  };
+
+  const handleMemberUpdate = async (memberId, field, value) => {
+    if (!db) return;
+    try {
+        const memberDocRef = doc(db, `artifacts/${appId}/public/data/members`, memberId);
+        await setDoc(memberDocRef, { [field]: value }, { merge: true });
+    } catch (e) {
+        console.error("Error updating member: ", e);
+        showModal({ title: 'エラー', message: 'メンバー情報の更新に失敗しました。', showCancel: false });
+    }
+  };
+
+  const filteredMembers = useMemo(() => {
+    if (filter === 'all') return members;
+    return members.filter(m => m.grade === filter);
+  }, [members, filter]);
+
+  return (
+    <div className="p-4 sm:p-6 space-y-6">
+      <h1 className="text-3xl font-bold text-slate-900">メンバー管理</h1>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <Card className="lg:col-span-1">
+          <CardTitle>新規メンバー追加</CardTitle>
+          <div className="space-y-4">
+            <Input type="text" placeholder="氏名" value={newMemberName} onChange={(e) => setNewMemberName(e.target.value)} />
+            <Select value={newMemberGrade} onChange={(e) => setNewMemberGrade(e.target.value)}>
+              <option value="W1">W1</option>
+              <option value="W2">W2</option>
+              <option value="W3">W3</option>
+            </Select>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={newMemberLicense} onChange={(e) => setNewMemberLicense(e.target.checked)} className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+              <span className="text-slate-700">免許あり</span>
+            </label>
+            <Button onClick={addMember} className="w-full">追加</Button>
+          </div>
+        </Card>
+
+        <Card className="lg:col-span-2">
+          <CardTitle>メンバー一覧</CardTitle>
+          <div className="mb-4">
+            <div className="flex flex-wrap gap-2">
+              <Button variant={filter === 'all' ? 'primary' : 'secondary'} onClick={() => setFilter('all')}>全て</Button>
+              <Button variant={filter === 'W1' ? 'primary' : 'secondary'} onClick={() => setFilter('W1')}>W1</Button>
+              <Button variant={filter === 'W2' ? 'primary' : 'secondary'} onClick={() => setFilter('W2')}>W2</Button>
+              <Button variant={filter === 'W3' ? 'primary' : 'secondary'} onClick={() => setFilter('W3')}>W3</Button>
+            </div>
+          </div>
+          <div className="overflow-x-auto -mx-4 sm:-mx-6">
+            <table className="min-w-full divide-y divide-slate-200">
+              <thead className="bg-slate-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">氏名</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">等級</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">免許</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">操作</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-slate-200">
+                {filteredMembers.map(member => (
+                  <tr key={member.id} className="hover:bg-slate-50">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">{member.name} {member.license && '🚗'}</td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <Select
+                        value={member.grade}
+                        onChange={(e) => handleMemberUpdate(member.id, 'grade', e.target.value)}
+                        className="text-sm p-1"
+                      >
+                        <option value="W1">W1</option>
+                        <option value="W2">W2</option>
+                        <option value="W3">W3</option>
+                      </Select>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <input
+                        type="checkbox"
+                        checked={member.license}
+                        onChange={(e) => handleMemberUpdate(member.id, 'license', e.target.checked)}
+                        className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                      />
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      <Button onClick={() => deleteMember(member.id)} variant="ghost" className="text-red-600 hover:text-red-800"><Trash2Icon /></Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+};
+
+
+// 機能①: スケジュール入力ページ
+const SchedulePage = ({ members, schedules, db, showModal }) => {
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [selectedUser, setSelectedUser] = useState(members[0]?.id || '');
+
+  const year = currentDate.getFullYear();
+  const month = currentDate.getMonth();
+
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const firstDayOfMonth = new Date(year, month, 1).getDay();
+
+  const calendarDays = useMemo(() => {
+    const days = [];
+    for (let i = 0; i < firstDayOfMonth; i++) {
+      days.push({ key: `empty-${i}`, empty: true });
+    }
+    for (let day = 1; day <= daysInMonth; day++) {
+      days.push({ key: `${year}-${month}-${day}`, day, date: new Date(year, month, day) });
+    }
+    return days;
+  }, [year, month, daysInMonth, firstDayOfMonth]);
+
+  const handleStatusChange = async (dateStr, status) => {
+    if (!selectedUser || !db) {
+      showModal({ title: 'エラー', message: 'ユーザーを選択してください。', showCancel: false });
+      return;
+    }
+    const userSchedules = schedules[selectedUser] || {};
+    const newSchedules = {
+      ...schedules,
+      [selectedUser]: {
+        ...userSchedules,
+        [dateStr]: status,
+      }
+    };
+    
+    try {
+        const schedulesCollectionPath = `artifacts/${appId}/public/data/schedules`;
+        const scheduleRef = doc(db, schedulesCollectionPath, selectedUser);
+        await setDoc(scheduleRef, { schedules: newSchedules[selectedUser] }, { merge: true });
+    } catch (e) {
+        console.error("Error updating schedule: ", e);
+        showModal({ title: 'エラー', message: 'スケジュールの更新に失敗しました。', showCancel: false });
+    }
+  };
+
+  const changeMonth = (offset) => {
+    setCurrentDate(new Date(year, month + offset, 1));
+  };
+
+  useEffect(() => {
+      if (members.length > 0 && !selectedUser) {
+          setSelectedUser(members[0].id);
+      }
+  }, [members, selectedUser]);
+
+  return (
+    <div className="p-4 sm:p-6">
+      <h1 className="text-3xl font-bold text-slate-900 mb-6">スケジュール入力</h1>
+      <Card>
+        <div className="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4">
+          <Select value={selectedUser} onChange={(e) => setSelectedUser(e.target.value)} className="w-full sm:w-auto">
+            <option disabled value="">ユーザーを選択</option>
+            {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+          </Select>
+          <div className="flex items-center">
+            <Button onClick={() => changeMonth(-1)} variant="ghost"><ChevronLeftIcon /></Button>
+            <h2 className="text-lg font-semibold mx-4 w-32 text-center">{`${year}年 ${month + 1}月`}</h2>
+            <Button onClick={() => changeMonth(1)} variant="ghost"><ChevronRightIcon /></Button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-7 gap-1 text-center font-semibold text-slate-600">
+          {['日', '月', '火', '水', '木', '金', '土'].map(day => <div key={day} className="py-2 text-xs sm:text-sm">{day}</div>)}
+        </div>
+        <div className="grid grid-cols-7 gap-1">
+          {calendarDays.map(d => {
+            if (d.empty) return <div key={d.key} className="border-t border-slate-200"></div>;
+            const dateStr = `${d.date.getFullYear()}-${(d.date.getMonth() + 1).toString().padStart(2, '0')}-${d.date.getDate().toString().padStart(2, '0')}`;
+            const status = schedules[selectedUser]?.[dateStr] || '';
+            return (
+              <div key={d.key} className="border border-slate-200 rounded-lg p-2 h-28 flex flex-col">
+                <div className="font-bold text-slate-700 text-sm">{d.day}</div>
+                <div className="flex-grow flex items-center justify-center">
+                  <Select
+                    value={status}
+                    onChange={(e) => handleStatusChange(dateStr, e.target.value)}
+                    className={`w-full text-sm ${status ? statusMap[status] : 'bg-white'}`}
+                    disabled={!selectedUser}
+                  >
+                    <option value="">-</option>
+                    <option value="〇">〇</option>
+                    <option value="△">△</option>
+                    <option value="×">×</option>
+                  </Select>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+    </div>
+  );
+};
+
+// 機能②: 計画作成ページ
+const PlanPage = ({ members, schedules, db, showModal }) => {
+    const [planName, setPlanName] = useState('');
+    const [planUrl, setPlanUrl] = useState('');
+    const [startDate, setStartDate] = useState('');
+    const [endDate, setEndDate] = useState('');
+    const [planMembers, setPlanMembers] = useState([]);
+    const [inTownMembers, setInTownMembers] = useState([]);
+
+    const handleStartDateChange = (date) => {
+        setStartDate(date);
+        if (!endDate || new Date(date) > new Date(endDate)) {
+            setEndDate(date);
+        }
+    };
+
+    const createPlan = async () => {
+        if (!planName.trim() || !startDate || !endDate || !db) {
+            showModal({ title: '入力エラー', message: '計画名と日程は必須です。', showCancel: false });
+            return;
+        }
+        const newId = `plan_${new Date().getTime()}`;
+        const newPlan = {
+            id: newId, name: planName, url: planUrl, startDate, endDate,
+            members: planMembers, inTownMembers, status: '未承認'
+        };
+        try {
+            const plansCollectionPath = `artifacts/${appId}/public/data/plans`;
+            await setDoc(doc(db, plansCollectionPath, newId), newPlan);
+            setPlanName(''); setPlanUrl(''); setStartDate(''); setEndDate('');
+            setPlanMembers([]); setInTownMembers([]);
+            showModal({ title: '成功', message: '計画を作成しました。', showCancel: false });
+        } catch (e) {
+            console.error("Error adding plan: ", e);
+            showModal({ title: 'エラー', message: '計画の作成に失敗しました。', showCancel: false });
+        }
+    };
+    
+    const overallScheduleData = useMemo(() => {
+        const data = [];
+        const today = new Date();
+        for (let i = 0; i < 90; i++) {
+            const date = new Date(today);
+            date.setDate(today.getDate() + i);
+            const dateStr = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
+            const dayData = { date: dateStr, '〇': [], '△': [], '×': [], '未': [] };
+            members.forEach(member => {
+                const status = schedules[member.id]?.[dateStr] || '未';
+                dayData[status].push(member.name.split(' ')[0]);
+            });
+            data.push(dayData);
+        }
+        return data;
+    }, [members, schedules]);
+
+    return (
+        <div className="p-4 sm:p-6 space-y-6">
+            <h1 className="text-3xl font-bold text-slate-900">計画作成</h1>
+            <Card>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <Input type="text" placeholder="山行名" value={planName} onChange={e => setPlanName(e.target.value)} />
+                    <Input type="url" placeholder="計画書URL" value={planUrl} onChange={e => setPlanUrl(e.target.value)} />
+                    <Input type="date" value={startDate} onChange={e => handleStartDateChange(e.target.value)} />
+                    <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
+                </div>
+                <div className="mt-6">
+                    <h3 className="font-semibold text-slate-700 mb-2">参加メンバー</h3>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                        {members.map(m => (
+                            <label key={m.id} className="flex items-center space-x-2 cursor-pointer">
+                                <input type="checkbox" className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" checked={planMembers.includes(m.id)} onChange={e => {
+                                    if(e.target.checked) setPlanMembers([...planMembers, m.id]);
+                                    else setPlanMembers(planMembers.filter(id => id !== m.id));
+                                }} />
+                                <span className="text-slate-700">{m.name}</span>
+                            </label>
+                        ))}
+                    </div>
+                </div>
+                <div className="mt-6">
+                    <h3 className="font-semibold text-slate-700 mb-2">在京メンバー (2名まで)</h3>
+                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                        {members.filter(m => !planMembers.includes(m.id)).map(m => (
+                            <label key={m.id} className="flex items-center space-x-2 cursor-pointer">
+                                <input type="checkbox" className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" checked={inTownMembers.includes(m.id)} 
+                                onChange={e => {
+                                    if(e.target.checked) { if(inTownMembers.length < 2) setInTownMembers([...inTownMembers, m.id]); } 
+                                    else { setInTownMembers(inTownMembers.filter(id => id !== m.id)); }
+                                }} 
+                                disabled={inTownMembers.length >= 2 && !inTownMembers.includes(m.id)}
+                                />
+                                <span className="text-slate-700">{m.name}</span>
+                            </label>
+                        ))}
+                    </div>
+                </div>
+                <div className="mt-6 text-right">
+                    <Button onClick={createPlan}>計画を作成</Button>
+                </div>
+            </Card>
+
+            <Card>
+                <CardTitle>全体スケジュール (3ヶ月)</CardTitle>
+                <div className="overflow-x-auto">
+                    <table className="min-w-full border-collapse">
+                        <thead>
+                            <tr>
+                                <th className="sticky left-0 bg-slate-100 p-2 text-sm font-semibold text-slate-600 border-r border-b border-slate-200">状態</th>
+                                {overallScheduleData.map(d => {
+                                    const date = new Date(d.date);
+                                    const dayOfWeek = ['日', '月', '火', '水', '木', '金', '土'][date.getDay()];
+                                    const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+                                    return (
+                                        <th key={d.date} className={`p-1 text-xs text-center border-b border-slate-200 ${isWeekend ? 'bg-slate-100' : 'bg-white'}`}>
+                                            {`${date.getMonth()+1}/${date.getDate()}`}<br/>({dayOfWeek})
+                                        </th>
+                                    );
+                                })}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {['〇', '△', '×', '未'].map(status => (
+                                <tr key={status}>
+                                    <td className={`sticky left-0 p-2 text-center font-bold border-r border-slate-200 ${statusMap[status]}`}>{statusText[status]}</td>
+                                    {overallScheduleData.map(d => (
+                                        <td key={`${d.date}-${status}`} className="border-t border-slate-200 p-1 text-xs align-top h-24 min-w-[60px]">
+                                            <div className="flex flex-wrap gap-1">
+                                                {d[status].map((name, i) => (
+                                                    <span key={i} className={`px-1.5 py-0.5 rounded text-xs ${statusMap[status]}`}>{name}</span>
+                                                ))}
+                                            </div>
+                                        </td>
+                                    ))}
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </Card>
+        </div>
+    );
+};
+
+
+// 機能④: 活動一覧ページ
+const ActivitiesPage = ({ plans, members, setPage, setSelectedPlan }) => {
+    
+    const getPlanDetails = (plan) => {
+        const planMembersDetails = members.filter(m => plan.members.includes(m.id));
+        const driverCount = planMembersDetails.filter(m => m.license).length;
+        const w3Count = planMembersDetails.filter(m => m.grade === 'W3').length;
+        const daysUntil = getDaysUntil(plan.startDate);
+        const deadline = daysUntil - 9;
+        return { driverCount, w3Count, daysUntil, deadline };
+    };
+
+    const handleEdit = (plan) => {
+        setSelectedPlan(plan);
+        setPage('PlanDetails');
+    };
+    
+    const statusBadge = (status) => {
+        switch(status) {
+            case '未承認': return 'bg-yellow-100 text-yellow-800';
+            case '未提出': return 'bg-slate-100 text-slate-800';
+            case '提出済': return 'bg-blue-100 text-blue-800';
+            default: return 'bg-slate-100 text-slate-800';
+        }
+    };
+
+    return (
+        <div className="p-4 sm:p-6">
+            <h1 className="text-3xl font-bold text-slate-900 mb-6">活動一覧</h1>
+            <Card>
+                <div className="overflow-x-auto -mx-4 sm:-mx-6">
+                    <table className="min-w-full divide-y divide-slate-200">
+                      <thead className="bg-slate-50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">計画名</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">日程</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">山行まで</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">締切まで</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">運転者</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">W3</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">ステータス</th>
+                          <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider"></th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-slate-200">
+                        {plans.map(plan => {
+                            const { driverCount, w3Count, daysUntil, deadline } = getPlanDetails(plan);
+                            return (
+                                <tr key={plan.id} className="hover:bg-slate-50">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">{plan.name}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{formatDate(plan.startDate)} ~ {formatDate(plan.endDate)}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{daysUntil >= 0 ? `${daysUntil}日` : '終了'}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{deadline >= 0 ? `${deadline}日` : '-'}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{driverCount}人</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{w3Count}人</td>
+                                    <td className="px-6 py-4 whitespace-nowrap"><span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusBadge(plan.status)}`}>{plan.status}</span></td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                        <Button onClick={() => handleEdit(plan)} variant="ghost"><EditIcon /></Button>
+                                    </td>
+                                </tr>
+                            );
+                        })}
+                      </tbody>
+                    </table>
+                </div>
+            </Card>
+        </div>
+    );
+};
+
+// 活動詳細・編集ページ
+const PlanDetailsPage = ({ plan, setPlan, members, setPage, db, showModal }) => {
+    const [editablePlan, setEditablePlan] = useState(plan);
+
+    const handleUpdate = async () => {
+        if (!db) return;
+        try {
+            const plansCollectionPath = `artifacts/${appId}/public/data/plans`;
+            await setDoc(doc(db, plansCollectionPath, editablePlan.id), editablePlan, { merge: true });
+            setPlan(editablePlan);
+            showModal({ title: '成功', message: '計画を更新しました。', showCancel: false });
+            setPage('Activities');
+        } catch (e) {
+            console.error("Error updating plan: ", e);
+            showModal({ title: 'エラー', message: '計画の更新に失敗しました。', showCancel: false });
+        }
+    };
+
+    const handleDelete = () => {
+        showModal({
+            title: '計画の削除',
+            message: `「${plan.name}」を本当に削除しますか？この操作は元に戻せません。`,
+            confirmText: '削除',
+            confirmVariant: 'danger',
+            onConfirm: async () => {
+                if (!db) return;
+                try {
+                    const plansCollectionPath = `artifacts/${appId}/public/data/plans`;
+                    await deleteDoc(doc(db, plansCollectionPath, plan.id));
+                    showModal({ title: '成功', message: '計画を削除しました。', showCancel: false, onConfirm: () => setPage('Activities') });
+                } catch (e) {
+                    console.error("Error deleting plan: ", e);
+                    showModal({ title: 'エラー', message: '計画の削除に失敗しました。', showCancel: false });
+                }
+            }
+        });
+    };
+    
+    const handleMemberChange = (memberId, isChecked) => {
+        const newMembers = isChecked ? [...editablePlan.members, memberId] : editablePlan.members.filter(id => id !== memberId);
+        setEditablePlan({ ...editablePlan, members: newMembers });
+    };
+
+    const handleInTownMemberChange = (memberId, isChecked) => {
+        let newInTownMembers = [...editablePlan.inTownMembers];
+        if (isChecked) { if (newInTownMembers.length < 2) newInTownMembers.push(memberId); } 
+        else { newInTownMembers = newInTownMembers.filter(id => id !== memberId); }
+        setEditablePlan({ ...editablePlan, inTownMembers: newInTownMembers });
+    };
+
+    return (
+        <div className="p-4 sm:p-6">
+            <h1 className="text-3xl font-bold text-slate-900 mb-6">計画詳細・編集</h1>
+            <Card>
+                <div className="space-y-6">
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">山行名</label>
+                        <Input type="text" value={editablePlan.name} onChange={e => setEditablePlan({...editablePlan, name: e.target.value})} />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">ステータス</label>
+                        <Select value={editablePlan.status} onChange={e => setEditablePlan({...editablePlan, status: e.target.value})}>
+                            <option>未承認</option>
+                            <option>未提出</option>
+                            <option>提出済</option>
+                        </Select>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">開始日</label>
+                            <Input type="date" value={editablePlan.startDate} onChange={e => setEditablePlan({...editablePlan, startDate: e.target.value})} />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">終了日</label>
+                            <Input type="date" value={editablePlan.endDate} onChange={e => setEditablePlan({...editablePlan, endDate: e.target.value})} />
+                        </div>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">計画書URL</label>
+                        <div className="flex items-center gap-2">
+                            <Input type="url" value={editablePlan.url} onChange={e => setEditablePlan({...editablePlan, url: e.target.value})} />
+                            <a href={editablePlan.url} target="_blank" rel="noopener noreferrer" className={`p-2 rounded-lg ${!editablePlan.url ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                               <ExternalLinkIcon />
+                            </a>
+                        </div>
+                    </div>
+                    <div>
+                        <h3 className="text-sm font-medium text-slate-700 mb-2">参加メンバー</h3>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                            {members.map(m => (
+                                <label key={m.id} className="flex items-center space-x-2 cursor-pointer">
+                                    <input type="checkbox" className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" checked={editablePlan.members.includes(m.id)} onChange={e => handleMemberChange(m.id, e.target.checked)} />
+                                    <span className="text-slate-700">{m.name}</span>
+                                </label>
+                            ))}
+                        </div>
+                    </div>
+                    <div>
+                        <h3 className="text-sm font-medium text-slate-700 mb-2">在京メンバー (2名まで)</h3>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                             {members.filter(m => !editablePlan.members.includes(m.id)).map(m => (
+                                <label key={m.id} className="flex items-center space-x-2 cursor-pointer">
+                                    <input type="checkbox" className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" checked={editablePlan.inTownMembers.includes(m.id)} 
+                                    onChange={e => handleInTownMemberChange(m.id, e.target.checked)} 
+                                    disabled={editablePlan.inTownMembers.length >= 2 && !editablePlan.inTownMembers.includes(m.id)}
+                                    />
+                                    <span className="text-slate-700">{m.name}</span>
+                                </label>
+                            ))}
+                        </div>
+                    </div>
+                    <div className="flex justify-between items-center pt-6 border-t border-slate-200">
+                        <Button onClick={handleDelete} variant="danger">計画を削除</Button>
+                        <div className="flex gap-2">
+                            <Button onClick={() => setPage('Activities')} variant="secondary">キャンセル</Button>
+                            <Button onClick={handleUpdate} variant="primary">更新</Button>
+                        </div>
+                    </div>
+                </div>
+            </Card>
+        </div>
+    );
+};
+
+
+// 機能⑤: カレンダーページ
+const CalendarPage = ({ plans, setPage, setSelectedPlan }) => {
+    const [currentDate, setCurrentDate] = useState(new Date());
+
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const firstDayOfMonth = new Date(year, month, 1).getDay();
+
+    const calendarDays = useMemo(() => {
+        const days = [];
+        for (let i = 0; i < firstDayOfMonth; i++) {
+            days.push({ key: `empty-${i}`, empty: true });
+        }
+        for (let day = 1; day <= daysInMonth; day++) {
+            const date = new Date(year, month, day);
+            const plansOnDate = plans.filter(p => {
+                const start = new Date(p.startDate); start.setHours(0,0,0,0);
+                const end = new Date(p.endDate); end.setHours(0,0,0,0);
+                return date >= start && date <= end;
+            });
+            days.push({ key: `${year}-${month}-${day}`, day, date, plans: plansOnDate });
+        }
+        return days;
+    }, [year, month, daysInMonth, firstDayOfMonth, plans]);
+
+    const changeMonth = (offset) => {
+        setCurrentDate(new Date(year, month + offset, 1));
+    };
+    
+    const handlePlanClick = (plan) => {
+        setSelectedPlan(plan);
+        setPage('PlanDetails');
+    };
+
+    return (
+        <div className="p-4 sm:p-6">
+            <h1 className="text-3xl font-bold text-slate-900 mb-6">活動カレンダー</h1>
+            <Card>
+                <div className="flex justify-center items-center mb-4">
+                    <Button onClick={() => changeMonth(-1)} variant="ghost"><ChevronLeftIcon /></Button>
+                    <h2 className="text-lg font-semibold mx-4 w-32 text-center">{`${year}年 ${month + 1}月`}</h2>
+                    <Button onClick={() => changeMonth(1)} variant="ghost"><ChevronRightIcon /></Button>
+                </div>
+
+                <div className="grid grid-cols-7 gap-1 text-center font-semibold text-slate-600">
+                    {['日', '月', '火', '水', '木', '金', '土'].map(day => <div key={day} className="py-2 text-xs sm:text-sm">{day}</div>)}
+                </div>
+                <div className="grid grid-cols-7 gap-1">
+                    {calendarDays.map(d => {
+                        if (d.empty) return <div key={d.key} className="border-t border-slate-200"></div>;
+                        return (
+                            <div key={d.key} className="border border-slate-200 rounded-lg p-1 h-32 flex flex-col overflow-hidden">
+                                <div className="font-bold text-slate-700 text-sm text-right pr-1">{d.day}</div>
+                                <div className="space-y-1 mt-1 overflow-y-auto">
+                                    {d.plans.map(plan => (
+                                        <div key={plan.id} onClick={() => handlePlanClick(plan)} className="text-xs bg-blue-100 text-blue-800 p-1 rounded cursor-pointer hover:bg-blue-200 truncate">
+                                            {plan.name}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            </Card>
+        </div>
+    );
+};
+
+// 機能⓪: ホームページ
+const HomePage = ({ plans, members, setPage, setSelectedPlan }) => {
+    const unapprovedPlans = plans.filter(p => p.status === '未承認');
+
+    const handlePlanClick = (plan) => {
+        setSelectedPlan(plan);
+        setPage('PlanDetails');
+    };
+
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+
+    const hikesThisMonth = plans.filter(plan => {
+        const startDate = new Date(plan.startDate);
+        return startDate.getFullYear() === currentYear && startDate.getMonth() === currentMonth;
+    }).length;
+
+    return (
+        <div className="p-4 sm:p-6 space-y-6">
+            <h1 className="text-3xl font-bold text-slate-900">ダッシュボード</h1>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <Card className="md:col-span-2 lg:col-span-2">
+                    <CardTitle>クイックアクション</CardTitle>
+                    <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3">
+                        <Button onClick={() => setPage('Plan')} variant="primary" className="w-full"><PlusSquareIcon /> 計画を作成</Button>
+                        <Button onClick={() => setPage('Schedule')} variant="secondary" className="w-full"><CalendarDaysIcon /> スケジュール入力</Button>
+                    </div>
+                </Card>
+                <Card>
+                    <CardTitle>部員数</CardTitle>
+                    <p className="text-3xl font-bold text-slate-900">{members.length}人</p>
+                </Card>
+                <Card>
+                    <CardTitle>当月の山行</CardTitle>
+                    <p className="text-3xl font-bold text-slate-900">{hikesThisMonth}回</p>
+                </Card>
+            </div>
+            <Card>
+                <CardTitle>未承認の計画</CardTitle>
+                <div className="space-y-3 max-h-60 overflow-y-auto">
+                    {unapprovedPlans.length > 0 ? (
+                        unapprovedPlans.map(plan => {
+                            const deadline = getDaysUntil(plan.startDate) - 9;
+                            return (
+                                <div key={plan.id} onClick={() => handlePlanClick(plan)} className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg cursor-pointer hover:bg-yellow-100 transition-colors">
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <p className="font-semibold text-yellow-800">{plan.name}</p>
+                                            <p className="text-sm text-slate-600">{formatDate(plan.startDate)} ~ {formatDate(plan.endDate)}</p>
+                                        </div>
+                                        <div className="text-right shrink-0 ml-4">
+                                            <p className="text-sm font-bold text-red-600">締切</p>
+                                            <p className="text-sm text-slate-600">{deadline >= 0 ? `あと${deadline}日` : '超過'}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })
+                    ) : (
+                        <p className="text-slate-500">未承認の計画はありません。</p>
+                    )}
+                </div>
+            </Card>
+        </div>
+    );
+};
+
+// 新機能：議事録ページ
+const MinutesPage = ({ minutes, db, showModal }) => {
+    const [selectedMinute, setSelectedMinute] = useState(null);
+    const [date, setDate] = useState('');
+    const [author, setAuthor] = useState('');
+    const editorRef = React.useRef(null);
+
+    useEffect(() => {
+        if (selectedMinute) {
+            setDate(selectedMinute.date);
+            setAuthor(selectedMinute.author);
+            if(editorRef.current) {
+                editorRef.current.innerHTML = selectedMinute.content;
+            }
+        } else {
+            setDate(new Date().toISOString().slice(0, 10));
+            setAuthor('');
+            if(editorRef.current) {
+                editorRef.current.innerHTML = '';
+            }
+        }
+    }, [selectedMinute]);
+
+    const handleSave = async () => {
+        if (!date || !author || !editorRef.current) {
+            showModal({ title: '入力エラー', message: '日付と文責者は必須です。', showCancel: false });
+            return;
+        }
+
+        const content = editorRef.current.innerHTML;
+        const minuteData = { date, author, content };
+        const id = selectedMinute ? selectedMinute.id : `min_${new Date().getTime()}`;
+        
+        try {
+            const minutesCollectionPath = `artifacts/${appId}/public/data/minutes`;
+            await setDoc(doc(db, minutesCollectionPath, id), minuteData);
+            showModal({ title: '成功', message: '議事録を保存しました。', showCancel: false });
+            if (!selectedMinute) {
+                setSelectedMinute({ id, ...minuteData });
+            }
+        } catch (e) {
+            console.error("Error saving minute:", e);
+            showModal({ title: 'エラー', message: '議事録の保存に失敗しました。', showCancel: false });
+        }
+    };
+    
+    const handleDelete = () => {
+        if (!selectedMinute) return;
+        showModal({
+            title: '議事録の削除',
+            message: `この議事録（${selectedMinute.date}）を本当に削除しますか？`,
+            confirmText: '削除',
+            confirmVariant: 'danger',
+            onConfirm: async () => {
+                try {
+                    const minutesCollectionPath = `artifacts/${appId}/public/data/minutes`;
+                    await deleteDoc(doc(db, minutesCollectionPath, selectedMinute.id));
+                    setSelectedMinute(null);
+                } catch (e) {
+                     showModal({ title: 'エラー', message: '議事録の削除に失敗しました。', showCancel: false });
+                }
+            }
+        });
+    };
+
+    const handleFormat = (command) => {
+        document.execCommand(command, false, null);
+        editorRef.current.focus();
+    };
+
+    return (
+        <div className="p-4 sm:p-6 h-full flex flex-col lg:flex-row gap-6">
+            <div className="lg:w-1/3 shrink-0">
+                <h1 className="text-3xl font-bold text-slate-900 mb-6">議事録</h1>
+                <Card>
+                    <div className="flex justify-between items-center mb-4">
+                        <CardTitle>過去の議事録</CardTitle>
+                        <Button onClick={() => setSelectedMinute(null)} variant="secondary">新規作成</Button>
+                    </div>
+                    <ul className="space-y-2 max-h-[60vh] overflow-y-auto">
+                        {minutes.map(minute => (
+                            <li key={minute.id} onClick={() => setSelectedMinute(minute)}
+                                className={`p-3 rounded-lg cursor-pointer transition-colors ${selectedMinute?.id === minute.id ? 'bg-blue-100' : 'hover:bg-slate-100'}`}>
+                                <p className="font-semibold text-slate-800">{formatDate(minute.date)}</p>
+                                <p className="text-sm text-slate-600">文責: {minute.author}</p>
+                            </li>
+                        ))}
+                    </ul>
+                </Card>
+            </div>
+            <div className="flex-1">
+                <Card className="h-full flex flex-col">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                        <Input type="date" value={date} onChange={e => setDate(e.target.value)} />
+                        <Input type="text" placeholder="文責者" value={author} onChange={e => setAuthor(e.target.value)} />
+                    </div>
+                    <div className="flex items-center gap-2 p-2 bg-slate-100 rounded-t-lg border-b border-slate-200">
+                        <button onClick={() => handleFormat('bold')} className="p-2 rounded hover:bg-slate-200"><b>B</b></button>
+                        <button onClick={() => handleFormat('italic')} className="p-2 rounded hover:bg-slate-200"><i>I</i></button>
+                        <button onClick={() => handleFormat('underline')} className="p-2 rounded hover:bg-slate-200"><u>U</u></button>
+                    </div>
+                    <div ref={editorRef} contentEditable="true"
+                         className="flex-1 p-4 bg-white rounded-b-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 overflow-y-auto"
+                         style={{ minHeight: '40vh' }}>
+                    </div>
+                    <div className="mt-4 flex justify-between">
+                        {selectedMinute && <Button onClick={handleDelete} variant="danger">削除</Button>}
+                        <div className="flex-grow" />
+                        <Button onClick={handleSave} variant="primary">保存</Button>
+                    </div>
+                </Card>
+            </div>
+        </div>
+    );
+};
+
+
+// Appコンポーネント
+function App() {
+  const [page, setPage] = useState('Home');
+  const [members, setMembers] = useState([]);
+  const [schedules, setSchedules] = useState({});
+  const [plans, setPlans] = useState([]);
+  const [minutes, setMinutes] = useState([]);
+  const [selectedPlan, setSelectedPlan] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [db, setDb] = useState(null);
+  const [auth, setAuth] = useState(null);
+  const [modal, setModal] = useState({ isOpen: false, title: '', message: '', onConfirm: null, showCancel: true, confirmText: 'OK', confirmVariant: 'primary' });
+
+  const showModal = ({ title, message, onConfirm, showCancel = true, confirmText = 'OK', confirmVariant = 'primary' }) => {
+    setModal({ isOpen: true, title, message, onConfirm, showCancel, confirmText, confirmVariant });
+  };
+
+  const closeModal = () => {
+    setModal({ isOpen: false, title: '', message: '', onConfirm: null, showCancel: true, confirmText: 'OK', confirmVariant: 'primary' });
+  };
+
+  useEffect(() => {
+    const initialize = async () => {
+      try {
+        const firebaseConfigStr = typeof __firebase_config !== 'undefined' ? __firebase_config : '{}';
+        const firebaseConfig = JSON.parse(firebaseConfigStr);
+        if (!firebaseConfig.apiKey) throw new Error("Firebase APIキーが無効です。");
+        
+        const app = initializeApp(firebaseConfig);
+        const firestoreDb = getFirestore(app);
+        const firestoreAuth = getAuth(app);
+        
+        setDb(firestoreDb);
+        setAuth(firestoreAuth);
+      } catch (e) {
+        console.error("Firebase initialization failed:", e);
+        setError(`Firebase初期化エラー: ${e.message}`);
+        setLoading(false);
+      }
+    };
+    initialize();
+  }, []);
+
+  useEffect(() => {
+    if (!auth) return;
+
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        // Members
+        const membersCollection = collection(db, `artifacts/${appId}/public/data/members`);
+        const unsubMembers = onSnapshot(membersCollection, (snapshot) => {
+          if (snapshot.empty) {
+              initialMembers.forEach(m => setDoc(doc(membersCollection, m.id), m));
+          } else {
+              setMembers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+          }
+        }, (err) => { setError("メンバーデータの取得に失敗しました。"); console.error(err); });
+
+        // Schedules
+        const schedulesCollection = collection(db, `artifacts/${appId}/public/data/schedules`);
+        const unsubSchedules = onSnapshot(schedulesCollection, (snapshot) => {
+            if (snapshot.empty) {
+                Object.entries(initialSchedules).forEach(([userId, userSchedules]) => {
+                    setDoc(doc(schedulesCollection, userId), { schedules: userSchedules });
+                });
+            } else {
+                const schedulesData = {};
+                snapshot.docs.forEach(doc => { schedulesData[doc.id] = doc.data().schedules; });
+                setSchedules(schedulesData);
+            }
+        }, (err) => { setError("スケジュールデータの取得に失敗しました。"); console.error(err); });
+
+        // Plans
+        const plansCollection = collection(db, `artifacts/${appId}/public/data/plans`);
+        const unsubPlans = onSnapshot(plansCollection, (snapshot) => {
+            if (snapshot.empty) {
+                initialPlans.forEach(p => setDoc(doc(plansCollection, p.id), p));
+            } else {
+                setPlans(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            }
+        }, (err) => { setError("計画データの取得に失敗しました。"); console.error(err); });
+
+        // Minutes
+        const minutesCollection = collection(db, `artifacts/${appId}/public/data/minutes`);
+        const q = query(minutesCollection, orderBy("date", "desc"));
+        const unsubMinutes = onSnapshot(q, (snapshot) => {
+            if (snapshot.empty) {
+                initialMinutes.forEach(m => setDoc(doc(minutesCollection, m.id), m));
+            } else {
+                 setMinutes(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            }
+            setLoading(false);
+        }, (err) => { setError("議事録データの取得に失敗しました。"); setLoading(false); console.error(err); });
+
+
+        return () => { unsubMembers(); unsubSchedules(); unsubPlans(); unsubMinutes(); };
+
+      } else {
+        try {
+          const authToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+          if (authToken) {
+            await signInWithCustomToken(auth, authToken);
+          } else {
+            await signInAnonymously(auth);
+          }
+        } catch (err) {
+            console.error("Authentication failed:", err);
+            setError("認証に失敗しました。");
+            setLoading(false);
+        }
+      }
+    });
+
+    return () => unsubscribe();
+  }, [db, auth]);
+  
+  const renderPage = () => {
+    if (loading) return <div className="flex justify-center items-center h-screen"><div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500"></div></div>;
+    if (error) return <div className="p-4 sm:p-6"><Card><div className="flex items-center gap-4 text-red-600"><AlertTriangleIcon /><div><h3 className="font-bold">エラーが発生しました</h3><p>{error}</p></div></div></Card></div>;
+    
+    const pageProps = { db, showModal, members, plans, schedules, minutes, setPage, setSelectedPlan, setPlan: setSelectedPlan };
+
+    switch (page) {
+      case 'Home': return <HomePage {...pageProps} />;
+      case 'Schedule': return <SchedulePage {...pageProps} />;
+      case 'Plan': return <PlanPage {...pageProps} />;
+      case 'Members': return <MembersPage {...pageProps} />;
+      case 'Activities': return <ActivitiesPage {...pageProps} />;
+      case 'Calendar': return <CalendarPage {...pageProps} />;
+      case 'Minutes': return <MinutesPage {...pageProps} />;
+      case 'PlanDetails': return <PlanDetailsPage {...pageProps} plan={selectedPlan} />;
+      default: return <HomePage {...pageProps} />;
+    }
+  };
+
+  const navItems = [
+      { id: 'Home', label: 'ホーム', icon: <HomeIcon /> },
+      { id: 'Schedule', label: 'スケジュール', icon: <CalendarDaysIcon /> },
+      { id: 'Plan', label: '計画作成', icon: <PlusSquareIcon /> },
+      { id: 'Activities', label: '活動一覧', icon: <ListIcon /> },
+      { id: 'Calendar', label: 'カレンダー', icon: <MountainIcon /> },
+      { id: 'Members', label: 'メンバー', icon: <UsersIcon /> },
+      { id: 'Minutes', label: '議事録', icon: <FileTextIcon /> },
+  ];
+
+  return (
+    <div className="flex flex-col md:flex-row min-h-screen bg-slate-100 font-sans">
+      <style>{`
+        main {
+          background-color: #f8fafc;
+          background-image: radial-gradient(#e2e8f0 1px, transparent 1px);
+          background-size: 16px 16px;
+        }
+      `}</style>
+      <nav className="md:w-64 bg-slate-900 text-slate-200 p-4 flex flex-col shrink-0">
+        <div className="text-2xl font-bold mb-8 flex items-center gap-3 text-white">
+            <MountainIcon />
+            <span>Wandervogel</span>
+        </div>
+        <ul className="space-y-2">
+          {navItems.map(item => (
+             <li key={item.id}>
+                <button onClick={() => setPage(item.id)} className={`w-full text-left flex items-center space-x-3 p-3 rounded-lg transition-colors ${page === item.id ? 'bg-slate-700 text-white' : 'hover:bg-slate-800 hover:text-white'}`}>
+                    {item.icon}
+                    <span>{item.label}</span>
+                </button>
+             </li>
+          ))}
+        </ul>
+      </nav>
+      <main className="flex-1 overflow-y-auto">
+        {renderPage()}
+      </main>
+      <Modal 
+        isOpen={modal.isOpen} 
+        title={modal.title}
+        message={modal.message}
+        onConfirm={() => {
+            if (modal.onConfirm) modal.onConfirm();
+            closeModal();
+        }}
+        onCancel={closeModal}
+        showCancel={modal.showCancel}
+        confirmText={modal.confirmText}
+        confirmVariant={modal.confirmVariant}
+      />
+    </div>
+  );
+}
+
+export default App;
